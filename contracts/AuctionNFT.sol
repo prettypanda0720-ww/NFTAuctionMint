@@ -15,13 +15,14 @@ contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
     using SafeMath for uint256;
     Counters.Counter private _tokenIds;
     uint256 MAX_SUPPLY = 10000;
-    uint256 SLIPPAGE_TOLERANCE = 2;
+    uint BASIC_SLIPPAGE_TOLERANCE = 2;
     /***  for production ***/
-    uint256 MINT_AVAILABLE_PERIOD = 187200;
+    uint256 MINT_AVAILABLE_TIME = 187200;
+    uint PUBLIC_MINT_AVAILABLE_TIME = 14400;
     uint MAX_OWN_COUNT = 10;
     
     /***  for test ***/
-    //uint256 MINT_AVAILABLE_PERIOD = 3600;
+    //uint256 MINT_AVAILABLE_TIME = 3600;
     //uint MAX_OWN_COUNT = 5;
 
     /**********  staging value for 
@@ -35,7 +36,6 @@ contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
     
     uint256 _startingPrice = 200000000000000000; // 2 * (10 ^ 17) wei
     uint256 _endingPrice = 50000000000000000; // 5 * (10 ^ 16)wei
-    uint256 _duration = 14400; // seconds
     uint256 _startedAt; // time
     
     /************* Variables for whitelist *************/
@@ -88,17 +88,23 @@ contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
         _countlist[msg.sender] = _countlist[msg.sender] + 1;
     }
 
-    function requestPublicToken() external payable nonReentrant{
+    function requestPublicToken(uint mintCount) external payable nonReentrant{
         uint256 secondsPassed = 0;
         secondsPassed = now.sub(_startedAt);
-        require(secondsPassed < MINT_AVAILABLE_PERIOD, "Minting is ended.");
+        require(secondsPassed < MINT_AVAILABLE_TIME, "Minting is ended.");
         require(super.totalSupply() < MAX_SUPPLY, "Maximum supply reached.");
         require(_stagingValue == 2, "Public Minting is not allowed.");
-        require(_countlist[msg.sender] < MAX_OWN_COUNT, "Overflow 10 tokens");
-        uint256 limitValue = getCurrentPrice().mul(10000 - SLIPPAGE_TOLERANCE).div(10000);
+        require(_countlist[msg.sender] + mintCount < MAX_OWN_COUNT, "Overflow 10 tokens");
+        uint tolerance = BASIC_SLIPPAGE_TOLERANCE;
+        if(secondsPassed > PUBLIC_MINT_AVAILABLE_TIME) {
+            TOLERANCE = 0;
+        }
+        uint256 limitValue = getCurrentPrice().mul(10000 - tolerance).div(10000);
         require(msg.value >= limitValue);
-        _tokenMint();
-        _countlist[msg.sender] = _countlist[msg.sender] + 1;
+        for (uint256 index = 0; index < mintCount; index++) {
+            _tokenMint();
+            _countlist[msg.sender] = _countlist[msg.sender] + 1;
+        }
     }
     
     function setWhiteList(address[] memory params) public onlyOwner{
@@ -132,7 +138,7 @@ contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
             
             secondsPassed = now.sub(_startedAt);
             
-            if(secondsPassed >= _duration) {
+            if(secondsPassed >= PUBLIC_MINT_AVAILABLE_TIME) {
                 
                 return _endingPrice;
                 
@@ -140,7 +146,7 @@ contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
                 
                 uint256 totalPriceChange = _startingPrice.sub(_endingPrice);
                 
-                uint256 currentPriceChange = totalPriceChange.mul(secondsPassed).div(_duration);
+                uint256 currentPriceChange = totalPriceChange.mul(secondsPassed).div(PUBLIC_MINT_AVAILABLE_TIME);
 
                 uint256 currentPrice = _startingPrice.sub(currentPriceChange);
 
