@@ -2,15 +2,11 @@ import { ethers } from 'ethers'
 import { useEffect, useState } from 'react'
 import { Button, notification } from 'antd'
 import web3 from 'web3'
-import axios from 'axios'
-import Web3Modal from "web3modal"
-import { contractAddress, presalePrice, PRIVATE_KEY } from "../config";
+import { contractAddress, presalePrice } from "../config";
 
 import AuctionNFT from '../artifacts/contracts/AuctionNFT.json'
 
 export const Presale = ({signer}) => {
-  console.log('props', signer)
-  const [nfts, setNfts] = useState([])
   const [presaleAvailable, setPresaleAvailable] = useState(false)
   useEffect(() => {
       getState()

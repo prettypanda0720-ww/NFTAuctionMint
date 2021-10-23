@@ -93,13 +93,14 @@ contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
         secondsPassed = now.sub(_startedAt);
         require(secondsPassed < MINT_AVAILABLE_TIME, "Minting is ended.");
         require(super.totalSupply() < MAX_SUPPLY, "Maximum supply reached.");
+        require(mintCount > 0, "Mint count has to be more than 1.");
         require(_stagingValue == 2, "Public Minting is not allowed.");
         require(_countlist[msg.sender] + mintCount < MAX_OWN_COUNT, "Overflow 10 tokens");
         uint tolerance = BASIC_SLIPPAGE_TOLERANCE;
         if(secondsPassed > PUBLIC_MINT_AVAILABLE_TIME) {
-            TOLERANCE = 0;
+            tolerance = 0;
         }
-        uint256 limitValue = getCurrentPrice().mul(10000 - tolerance).div(10000);
+        uint256 limitValue = getCurrentPrice().mul(10000 - tolerance).mul(mintCount).div(10000);
         require(msg.value >= limitValue);
         for (uint256 index = 0; index < mintCount; index++) {
             _tokenMint();

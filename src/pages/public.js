@@ -1,7 +1,7 @@
 import { ethers } from 'ethers'
 import { useEffect, useState } from 'react'
 import web3 from 'web3'
-import { Button, notification } from 'antd'
+import { Slider, InputNumber, Button, notification, Row, Col } from 'antd'
 
 import { contractAddress } from '../config'
 
@@ -9,7 +9,7 @@ import AuctionNFT from '../artifacts/contracts/AuctionNFT.json'
 
 export const Public = ({signer}) => {
   const [publicAvailable, setPublicAvailable] = useState(false)
-  const [currentPrice, setCurrentPrice] = useState(0)
+  const [inputValue, setInputValue] = useState(1)
   useEffect(() => {getState()}, [])
   
   async function getState() {
@@ -72,6 +72,27 @@ export const Public = ({signer}) => {
   return (
     <div className="flex justify-center">
       <div style={{ width: 900 }}>
+        <div className="grid grid-cols-2 gap-4 pt-8">
+          <Row>
+            <Col span={12}>
+              <Slider
+                min={1}
+                max={20}
+                onChange={(val) => {setInputValue(val)}}
+                value={inputValue}
+              />
+            </Col>
+            <Col span={4}>
+              <InputNumber
+                min={1}
+                max={20}
+                style={{ margin: '0 16px' }}
+                value={inputValue}
+                onChange={(val)=> {setInputValue(val)}}
+              />
+            </Col>
+          </Row>
+        </div>
         <div className="grid grid-cols-2 gap-4 pt-8">
           <Button type="primary" onClick={() => publicMint()}>Mint</Button>  
         </div>

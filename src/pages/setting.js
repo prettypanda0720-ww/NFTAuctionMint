@@ -1,9 +1,9 @@
 import { ethers } from 'ethers'
-import { useEffect, useState } from 'react'
-import { Button, notification, Form, Input } from 'antd'
+import { useState } from 'react'
+import { Button, notification, Input } from 'antd'
 import web3 from 'web3'
 
-import { contractAddress, presalePrice, PRIVATE_KEY } from "../config";
+import { contractAddress } from "../config";
 
 import AuctionNFT from '../artifacts/contracts/AuctionNFT.json'
 
@@ -29,10 +29,7 @@ export const Setting = ({signer}) => {
 
       const auctionContract = new ethers.Contract(contractAddress, AuctionNFT.abi, signer)
       
-      const price = web3.utils.toWei(presalePrice, 'ether');
-      console.log('whiteList', whiteLst)
       const params = whiteLst.split(',')
-      console.log('array', params)
       await auctionContract.setWhiteList( params )
         .then((tx) => {
             return tx.wait().then((receipt) => {
