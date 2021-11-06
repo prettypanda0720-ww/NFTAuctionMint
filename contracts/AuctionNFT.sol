@@ -7,9 +7,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
+contract AuctionNFT is ERC721, Ownable {
     
     using Counters for Counters.Counter;
     using SafeMath for uint256;
@@ -17,17 +16,21 @@ contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
     uint256 MAX_SUPPLY = 10000;
     uint BASIC_SLIPPAGE_TOLERANCE = 2;
     /***  for production ***/
-    uint256 MINT_AVAILABLE_TIME = 187200;
     uint PUBLIC_MINT_AVAILABLE_TIME = 14400;
+    uint NORMAL_MINT_AVAILABLE_TIME = 172800;
     uint MAX_OWN_COUNT = 10;
     
     /***  for test ***/
-    //uint256 MINT_AVAILABLE_TIME = 3600;
-    //uint MAX_OWN_COUNT = 5;
+    // uint PUBLIC_MINT_AVAILABLE_TIME = 600;
+    // uint NORMAL_MINT_AVAILABLE_TIME = 600;
+    // uint MAX_OWN_COUNT = 5;
 
     /**********  staging value for 
+        initial state (value = 0)
         presale (value = 1), 
         public minting (value = 2)
+        normal minting (value = 3)
+        ended (value = 4)
     *******************************/
     
     uint _stagingValue = 0;
@@ -36,14 +39,17 @@ contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
     
     uint256 _startingPrice = 200000000000000000; // 2 * (10 ^ 17) wei
     uint256 _endingPrice = 50000000000000000; // 5 * (10 ^ 16)wei
-    uint256 _startedAt; // time
+    uint256 _publicStartedAt = 0; // time
+    uint256 _normalStartedAt = 0; // time
     
     /************* Variables for whitelist *************/
     
     mapping(address => bool) private _whitelist;
     mapping(address => uint) private _countlist;
 
-    event currePrice(uint256 currPrice);
+    event presaleSuccess(bool result);
+    event publicsaleSuccess(bool result);
+    event normalsaleSuccess(bool result);
     
     struct MarketItem {
         uint itemId;
@@ -55,7 +61,7 @@ contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
 
     mapping(uint256 => MarketItem) private idToMarketItem;    
     
-    constructor() public ERC721("NFT Auction", "NFTA") payable {
+    constructor() public ERC721("NFT Auction", "CTBA") payable {
         
     }
 
@@ -78,7 +84,7 @@ contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
         _tokenMint();
     }
     
-    function requestPresaleToken() external payable nonReentrant{
+    function requestPresaleToken() external payable {
         require(super.totalSupply() < MAX_SUPPLY, "Maximum supply reached.");
         require(_stagingValue == 1, "Presale is not allowed.");
         require(_whitelist[msg.sender], "This address is not included in whitelist.");
@@ -86,28 +92,43 @@ contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
         require(msg.value == _endingPrice, "Invalid funds");
         _tokenMint();
         _countlist[msg.sender] = _countlist[msg.sender] + 1;
+        emit presaleSuccess(true);
     }
 
-    function requestPublicToken(uint mintCount) external payable nonReentrant{
+    function requestPublicToken(uint mintCount) external payable {
         uint256 secondsPassed = 0;
-        secondsPassed = now.sub(_startedAt);
-        require(secondsPassed < MINT_AVAILABLE_TIME, "Minting is ended.");
-        require(super.totalSupply() < MAX_SUPPLY, "Maximum supply reached.");
+        secondsPassed = now.sub(_publicStartedAt);
+        require(secondsPassed < PUBLIC_MINT_AVAILABLE_TIME, "Minting is ended.");
+        require(super.totalSupply() + mintCount <= MAX_SUPPLY, "Maximum supply reached.");
         require(mintCount > 0, "Mint count has to be more than 1.");
         require(_stagingValue == 2, "Public Minting is not allowed.");
-        require(_countlist[msg.sender] + mintCount < MAX_OWN_COUNT, "Overflow 10 tokens");
+        require(_countlist[msg.sender] + mintCount <= MAX_OWN_COUNT, "Overflow 10 tokens");
         uint tolerance = BASIC_SLIPPAGE_TOLERANCE;
-        if(secondsPassed > PUBLIC_MINT_AVAILABLE_TIME) {
-            tolerance = 0;
-        }
         uint256 limitValue = getCurrentPrice().mul(10000 - tolerance).mul(mintCount).div(10000);
         require(msg.value >= limitValue);
         for (uint256 index = 0; index < mintCount; index++) {
             _tokenMint();
             _countlist[msg.sender] = _countlist[msg.sender] + 1;
         }
+        emit publicsaleSuccess(true);
     }
     
+    function requestNormalToken(uint mintCount) external payable {
+        uint256 secondsPassed = 0;
+        secondsPassed = now.sub(_normalStartedAt);
+        require(secondsPassed < NORMAL_MINT_AVAILABLE_TIME, "Minting is ended.");
+        require(super.totalSupply() + mintCount < MAX_SUPPLY, "Maximum supply reached.");
+        require(_stagingValue == 3, "Normal Minting is not allowed.");
+        require(_countlist[msg.sender] + mintCount <= MAX_OWN_COUNT, "Overflow 10 tokens");
+        uint256 limitValue = getCurrentPrice().mul(mintCount);
+        require(msg.value == limitValue, "Invalid funds");
+        for (uint256 index = 0; index < mintCount; index++) {
+            _tokenMint();
+            _countlist[msg.sender] = _countlist[msg.sender] + 1;
+        }
+        emit normalsaleSuccess(true);
+    }
+
     function setWhiteList(address[] memory params) public onlyOwner{
         require(params.length > 0, "Please input whiltelist array");
         for(uint i = 0; i < params.length; i++) {
@@ -117,13 +138,59 @@ contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
 
     function setStage(uint256 value) public onlyOwner{
         require(value >= 0, "Invalid staging value");
-        require(value < 3, "Invalid staging value");
+        require(value < 5, "Invalid staging value");
         _stagingValue = value;
         if(value == 2) {
-            _startedAt = now;
+            _publicStartedAt = now;
+        } else if (value == 3) {
+            _normalStartedAt = now;
         }
     }
     
+    function getPublicMintingAvailableTime() public view returns(uint256) {
+        if(_publicStartedAt > 0) {
+            uint256 secondsPassed = 0;
+            secondsPassed = now.sub(_publicStartedAt);
+            if(secondsPassed > PUBLIC_MINT_AVAILABLE_TIME) {
+                return 0;
+            } else {
+                return PUBLIC_MINT_AVAILABLE_TIME - secondsPassed;
+            }
+        } else {
+            return 0;
+        }
+    }
+
+    function setPublicMintingAvailableTime(uint256 value) public onlyOwner {
+        PUBLIC_MINT_AVAILABLE_TIME = value;
+    }
+
+    function getNormalMintingAvailableTime() public view returns(uint256) {
+        if(_normalStartedAt > 0) {
+            uint256 secondsPassed = 0;
+            secondsPassed = now.sub(_normalStartedAt);
+            if(secondsPassed > NORMAL_MINT_AVAILABLE_TIME) {
+                return 0;
+            } else {
+                return NORMAL_MINT_AVAILABLE_TIME - secondsPassed;
+            }
+        } else {
+            return 0;
+        }
+    }
+
+    function setNormalMintingAvailableTime(uint256 value) public onlyOwner {
+        NORMAL_MINT_AVAILABLE_TIME = value;
+    }
+
+    function getMaxMintCount() public view returns(uint256) {
+        return MAX_OWN_COUNT;
+    }
+
+    function setMaxMintCount(uint256 value) public onlyOwner {
+        MAX_OWN_COUNT = value;
+    }
+
     function getCurrentStage() public view returns(uint256) {
         return _stagingValue;
     }
@@ -137,9 +204,9 @@ contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
 
             uint256 secondsPassed = 0;
             
-            secondsPassed = now.sub(_startedAt);
+            secondsPassed = now.sub(_publicStartedAt);
             
-            if(secondsPassed >= PUBLIC_MINT_AVAILABLE_TIME) {
+            if(secondsPassed > PUBLIC_MINT_AVAILABLE_TIME) {
                 
                 return _endingPrice;
                 
@@ -154,6 +221,10 @@ contract AuctionNFT is ERC721, Ownable, ReentrancyGuard {
                 return currentPrice;
             
             }   
+
+        } else if (_stagingValue == 3) {
+
+            return _endingPrice;
 
         } else {
             
